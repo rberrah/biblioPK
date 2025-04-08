@@ -2,18 +2,12 @@ import requests
 import pandas as pd
 import streamlit as st
 
-def enrich_query_with_pk_keywords(query):
+def construct_query_with_required_keywords(query):
     """
-    Enrichit la requête de recherche initiale avec des mots-clés spécifiques aux modèles PK/PKPD.
+    Construit une requête PubMed qui rend obligatoires certains mots-clés spécifiques aux modèles PK et PKPD.
     """
-    pk_keywords = [
-        "Monolix", "NONMEM", "estimated clearance", 
-        "pharmacokinetics model", "pharmacodynamic model", 
-        "population PK", "compartmental model", 
-        "estimated parameter", "Bayesian analysis", "clearance variability",
-        "PKPD modeling", "absorption rate", "elimination half-life"
-    ]
-    enriched_query = query + " (" + " OR ".join(pk_keywords) + ")"
+    required_keywords = ["pharmacometry", "estimated parameters"]
+    enriched_query = query + " AND " + " AND ".join(required_keywords)
     return enriched_query
 
 def search_pubmed(query, max_results=20):
@@ -103,9 +97,9 @@ max_results = st.slider("Nombre d'articles à récupérer", 5, 50, 20)
 
 if st.button("Rechercher"):
     if query:
-        # Enrichir la requête avec des mots-clés spécifiques aux modèles PK/PKPD
-        enriched_query = enrich_query_with_pk_keywords(query)
-        st.write(f"Requête enrichie utilisée : {enriched_query}")
+        # Construire la requête avec les mots-clés obligatoires
+        enriched_query = construct_query_with_required_keywords(query)
+        st.write(f"Requête utilisée avec mots-clés obligatoires : {enriched_query}")
 
         st.write("Recherche en cours...")
         pubmed_ids = search_pubmed(enriched_query, max_results)
