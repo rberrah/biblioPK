@@ -1,16 +1,16 @@
 import requests
 import pandas as pd
+import math
 import streamlit as st
 
-def construct_query(query, use_enrichment=True):
+def construct_query_with_minimum_keywords(query, keywords, min_percentage=33):
     """
-    Construit une requête PubMed avec ou sans mots-clés enrichis.
+    Construit une requête PubMed avec un pourcentage minimum de mots-clés requis.
     """
-    if use_enrichment:
-        required_keywords = ["pharmacometry", "estimated parameters", "model"]
-        enriched_query = query + " AND (" + " OR ".join(required_keywords) + ")"
-        return enriched_query
-    return query
+    min_keywords = math.ceil(len(keywords) * min_percentage / 100)  # Calcule le nombre de mots-clés nécessaires
+    required_keywords = " OR ".join(keywords[:min_keywords])  # Prend au moins le minimum nécessaire
+    enriched_query = f"({query}) AND ({required_keywords})"
+    return enriched_query
 
 def search_pubmed(query, max_results=50):
     """
@@ -83,16 +83,25 @@ def determine_model_type(title, summary):
     return "Non spécifié"
 
 # Interface Streamlit
-st.title("Recherche PK/PKPD avec extraction avancée des modèles pharmacocinétiques")
+st.title("Recherche PK/PKPD avec tri avancé et extraction des modèles pharmacocinétiques")
 
-query = st.text_input("Entrez vos mots-clés de recherche (ex : pharmacometry PK)")
-use_enrichment = st.checkbox("Ajouter des mots-clés spécifiques (pharmacometry, estimated parameters, model)", value=True)
+query = st.text_input("Entrez vos mots-clés de recherche (ex : pharmacokinetics)")
+use_enrichment = st.checkbox("Activer les mots-clés obligatoires (lié à la pharmacométrie)", value=True)
 max_results = st.slider("Nombre d'articles à récupérer", 5, 50, 20)
+
+keywords = [
+    "PK model", "bicompartimental", "monocompartimental", 
+    "pharmacokinetics", "estimated parameters", "clearance", 
+    "absorption", "distribution volume", "central compartment"
+]
 
 if st.button("Rechercher"):
     if query:
-        # Construire la requête avec ou sans enrichissement
-        constructed_query = construct_query(query, use_enrichment)
+        # Construire la requête en incluant un pourcentage minimum de mots-clés
+        if use_enrichment:
+            constructed_query = construct_query_with_minimum_keywords(query, keywords, min_percentage=33)
+        else:
+            constructed_query = query
         st.write(f"Requête utilisée : {constructed_query}")
 
         st.write("Recherche en cours...")
@@ -104,7 +113,7 @@ if st.button("Rechercher"):
             articles = fetch_article_details(pubmed_ids)
             df = pd.DataFrame(articles)
 
-            # Ajout de tri interactif par Streamlit
+            # Tri dynamique
             sort_column = st.selectbox("Trier les résultats par :", options=["Journal", "Date de publication"])
             if sort_column:
                 df = df.sort_values(by=sort_column, ascending=True)
