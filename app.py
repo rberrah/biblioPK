@@ -1,19 +1,11 @@
 import requests
-import nltk
-nltk.download('punkt')
-nltk.download('stopwords')
 import pandas as pd
-from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
-import nltk
 import streamlit as st
 
-# Assurez-vous que NLTK est configuré correctement
-nltk.download('punkt')
-nltk.download('stopwords')
-
 def search_pubmed(query, max_results=20):
-    """Recherche des articles sur PubMed via l'API Entrez."""
+    """
+    Recherche des articles sur PubMed via l'API Entrez.
+    """
     base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
     params = {
         "db": "pubmed",
@@ -26,7 +18,9 @@ def search_pubmed(query, max_results=20):
     return results["esearchresult"]["idlist"]
 
 def fetch_article_details(pubmed_ids, query_keywords):
-    """Récupération des détails des articles à partir de leurs PubMed IDs et ajout d'un score de pertinence."""
+    """
+    Récupération des détails des articles à partir de leurs PubMed IDs et ajout d'un score de pertinence.
+    """
     base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
     params = {
         "db": "pubmed",
@@ -53,14 +47,14 @@ def fetch_article_details(pubmed_ids, query_keywords):
     return sorted(articles, key=lambda x: x["Score Pertinence"], reverse=True)
 
 def extract_population(title):
-    """Utilise un traitement NLP pour détecter des mots-clés relatifs à la population étudiée dans le titre ou le résumé."""
-    tokens = word_tokenize(title)
-    stop_words = set(stopwords.words('english'))
-    filtered_tokens = [word for word in tokens if word.lower() not in stop_words]
+    """
+    Détecte les mots-clés relatifs à la population étudiée dans le titre sans utiliser NLTK.
+    """
     populations = ['mice', 'rats', 'humans', 'children', 'adults']
-    for token in filtered_tokens:
-        if token.lower() in populations:
-            return token.capitalize()
+    tokens = title.lower().split()  # Tokenisation simplifiée avec split()
+    for population in populations:
+        if population in tokens:
+            return population.capitalize()
     return "Non spécifié"
 
 def calculate_relevance_score(article, query_keywords):
