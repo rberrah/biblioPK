@@ -85,7 +85,7 @@ st.title("Recherche PubMed avec Classement par Pertinence")
 st.markdown("Entrez vos critères de recherche pour obtenir une liste d'articles scientifiques classée par pertinence.")
 
 # Entrée utilisateur
-query = st.text_input("Critères de recherche (exemple : 'antibiotic mice pharmacokinetics')", "")
+query = st.text_input("Critères de recherche (exemple : 'antibiotic ICU')", "")
 max_results = st.slider("Nombre d'articles à récupérer", 5, 50, 20)
 
 if st.button("Rechercher"):
@@ -102,7 +102,24 @@ if st.button("Rechercher"):
         # Affichage des résultats
         st.dataframe(df)
 
-        # Option d'export
+        # Option d'affinage des résultats
+        st.markdown("### Affiner la recherche")
+        refine_keywords = st.text_input("Ajouter des mots-clés pour affiner les résultats (exemple : 'macrolides, vancomycin')", "")
+        if refine_keywords:
+            refine_keywords_list = refine_keywords.split(",")
+            refined_articles = [article for article in articles if any(keyword.strip().lower() in article['Titre'].lower() or keyword.strip().lower() in article['Résumé'].lower() for keyword in refine_keywords_list)]
+            refined_df = pd.DataFrame(refined_articles)
+            st.dataframe(refined_df)
+
+            # Option d'export pour les résultats affinés
+            st.download_button(
+                label="Télécharger les résultats affinés en CSV",
+                data=refined_df.to_csv(index=False),
+                file_name="resultats_pubmed_affines.csv",
+                mime="text/csv",
+            )
+
+        # Option d'export pour les résultats initiaux
         st.download_button(
             label="Télécharger les résultats en CSV",
             data=df.to_csv(index=False),
