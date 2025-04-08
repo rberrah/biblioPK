@@ -2,8 +2,10 @@ import requests
 import pandas as pd
 import streamlit as st
 
-# Fonction pour rechercher des articles sur PubMed
 def search_pubmed(query, max_results=20):
+    """
+    Recherche des articles sur PubMed via l'API Entrez.
+    """
     base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
     params = {
         "db": "pubmed",
@@ -15,8 +17,10 @@ def search_pubmed(query, max_results=20):
     results = response.json()
     return results["esearchresult"]["idlist"]
 
-# Fonction pour récupérer les détails des articles
 def fetch_article_details(pubmed_ids, query_keywords):
+    """
+    Récupération des détails des articles à partir de leurs PubMed IDs et ajout des informations spécifiques.
+    """
     base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
     params = {
         "db": "pubmed",
@@ -30,79 +34,79 @@ def fetch_article_details(pubmed_ids, query_keywords):
         if id == "uids":  # Clé inutilisée
             continue
         article = {
+            "Type de modèle": determine_model_type(details.get("title", ""), details.get("title", "")),
             "Titre": details.get("title", "Non spécifié"),
             "Date de publication": details.get("pubdate", "Non spécifié"),
             "Lien": f"https://pubmed.ncbi.nlm.nih.gov/{id}/",
             "Résumé": details.get("title", "Non spécifié"),
             "Journal": details.get("source", "Non spécifié"),
+            "Nombre de sujets": extract_subject_count(details.get("title", "")),
         }
         # Score de pertinence basé sur les mots-clés
         article["Score Pertinence"] = calculate_relevance_score(article, query_keywords)
         articles.append(article)
     return sorted(articles, key=lambda x: x["Score Pertinence"], reverse=True)
 
-# Fonction pour calculer le score de pertinence
+def determine_model_type(title, summary):
+    """
+    Détermine le type de modèle (PK, PKPD, etc.) en fonction des mots-clés dans le titre ou le résumé.
+    """
+    model_types = ["PK", "PKPD", "mono-compartimental", "bicompartmental"]
+    for model_type in model_types:
+        if model_type.lower() in title.lower() or model_type.lower() in summary.lower():
+            return model_type
+    return "Non spécifié"
+
+def extract_subject_count(summary):
+    """
+    Extrait le nombre de sujets ayant permis de développer le modèle à partir du résumé.
+    """
+    words = summary.lower().split()
+    for i, word in enumerate(words):
+        if word in ["subjects", "patients", "individuals"]:
+            try:
+                return int(words[i - 1])  # Retourne le nombre avant le mot clé
+            except ValueError:
+                continue
+    return "Non spécifié"
+
 def calculate_relevance_score(article, query_keywords):
+    """
+    Calcule un score de pertinence basé sur :
+    - La correspondance des mots-clés dans le titre et le résumé
+    """
     title = article["Titre"].lower()
     summary = article["Résumé"].lower()
     keyword_score = sum([title.count(keyword.lower()) + summary.count(keyword.lower()) for keyword in query_keywords])
     return keyword_score
 
-# Initialisation de la session Streamlit
-if "results" not in st.session_state:
-    st.session_state["results"] = None  # Pour les résultats de recherche
-if "query_keywords" not in st.session_state:
-    st.session_state["query_keywords"] = None  # Pour les mots-clés
-if "refine_keywords" not in st.session_state:
-    st.session_state["refine_keywords"] = None  # Pour les commentaires d'affinage
-
 # Interface Streamlit
-st.title("Recherche PubMed avec Classement par Pertinence")
+st.title("Recherche PubMed spécialisée pour les modèles PK et PKPD")
 
 # Entrée utilisateur
-query = st.text_input("Critères de recherche (exemple : 'antibiotic ICU')", "")
+query = st.text_input("Critères de recherche (exemple : 'PK model ICU')", "")
 max_results = st.slider("Nombre d'articles à récupérer", 5, 50, 20)
 
 if st.button("Rechercher"):
     if query:
         st.write("Recherche en cours...")
+        query_keywords = query.split()
         pubmed_ids = search_pubmed(query, max_results)
-        st.session_state["query_keywords"] = query.split()
-        articles = fetch_article_details(pubmed_ids, st.session_state["query_keywords"])
-        st.session_state["results"] = articles
-        st.write(f"{len(articles)} articles trouvés.")
+        st.write(f"{len(pubmed_ids)} articles trouvés.")
 
-if st.session_state["results"]:
-    df = pd.DataFrame(st.session_state["results"])
-    st.dataframe(df)
+        st.write("Récupération des détails des articles et ajout des informations spécifiques...")
+        articles = fetch_article_details(pubmed_ids, query_keywords)
+        df = pd.DataFrame(articles)
 
-    # Option d'affinage des résultats
-    st.markdown("### Affiner la recherche")
-    refine_keywords = st.text_input("Ajouter des mots-clés pour affiner les résultats (exemple : 'macrolides, vancomycin')", "")
-    if st.button("Affiner") and refine_keywords:
-        st.session_state["refine_keywords"] = refine_keywords.split(",")
-        refined_articles = [
-            article for article in st.session_state["results"]
-            if any(keyword.strip().lower() in article["Titre"].lower() or keyword.strip().lower() in article["Résumé"].lower()
-                   for keyword in st.session_state["refine_keywords"])
-        ]
-        refined_df = pd.DataFrame(refined_articles)
-        st.dataframe(refined_df)
+        # Affichage des résultats
+        st.dataframe(df)
 
-        # Option d'export pour les résultats affinés
+        # Option d'export pour les résultats
         st.download_button(
-            label="Télécharger les résultats affinés en CSV",
-            data=refined_df.to_csv(index=False),
-            file_name="resultats_pubmed_affines.csv",
+            label="Télécharger les résultats en CSV",
+            data=df.to_csv(index=False),
+            file_name="resultats_pk_pkpd.csv",
             mime="text/csv",
         )
-
-    # Option d'export pour les résultats initiaux
-    st.download_button(
-        label="Télécharger les résultats en CSV",
-        data=df.to_csv(index=False),
-        file_name="resultats_pubmed_classe.csv",
-        mime="text/csv",
-    )
-else:
-    st.warning("Veuillez effectuer une recherche pour voir les résultats.")
+    else:
+        st.warning("Veuillez entrer des critères de recherche.")
