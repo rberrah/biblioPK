@@ -1,25 +1,25 @@
 import requests
 import pandas as pd
 import math
-import re  # Utilisé pour détecter des valeurs numériques
+import re
 import streamlit as st
 
 def construct_query_with_keywords(user_keywords, pharmacometry_keywords):
     """
     Construit une requête PubMed avec des mots-clés obligatoires (donnés par l'utilisateur à 100%)
-    et des mots-clés pharmacométriques de préférence (non obligatoires).
+    et des mots-clés pharmacométriques préférentiels.
     """
     # Mots-clés obligatoires donnés par l'utilisateur
     user_query = " AND ".join(user_keywords)
 
-    # Mots-clés pharmacométriques : ajoutés en préférence avec OR
+    # Mots-clés pharmacométriques ajoutés avec OR pour plus de flexibilité
     pharmacometry_query = " OR ".join(pharmacometry_keywords)
 
     # Construction de la requête enrichie
     enriched_query = f"({user_query}) AND ({pharmacometry_query})"
     return enriched_query
 
-def search_pubmed(query, max_results=50):
+def search_pubmed(query, max_results=200):
     """
     Recherche des articles sur PubMed via l'API Entrez.
     """
@@ -33,8 +33,8 @@ def search_pubmed(query, max_results=50):
 
     try:
         response = requests.get(base_url, params=params)
-        response.raise_for_status()  # Vérifie les erreurs HTTP (ex: 404, 500)
-        data = response.json()  # Tente de parser la réponse en JSON
+        response.raise_for_status()
+        data = response.json()
         return data.get("esearchresult", {}).get("idlist", [])
     except requests.exceptions.JSONDecodeError:
         st.error("La réponse de l'API PubMed n'est pas au format JSON. Vérifiez votre requête.")
@@ -69,11 +69,9 @@ def fetch_article_details(pubmed_ids):
                 "Lien": f"https://pubmed.ncbi.nlm.nih.gov/{id}/",
                 "Résumé": details.get("title", "Non spécifié"),
                 "Type de modèle": determine_model_type(details.get("title", ""), details.get("title", "")),
-                "Paramètres estimés détectés": detect_estimated_parameters(details.get("title", "")),
+                "Mention de paramètres estimés": detect_estimated_parameters(details.get("title", "")),
             }
-            # Filtrer uniquement les articles contenant des valeurs numériques pour les paramètres estimés
-            if article["Paramètres estimés détectés"] == "Oui":
-                articles.append(article)
+            articles.append(article)
         return articles
     except requests.exceptions.JSONDecodeError:
         st.error("La réponse de l'API PubMed n'est pas au format JSON. Impossible de récupérer les articles.")
@@ -94,10 +92,9 @@ def determine_model_type(title, summary):
 
 def detect_estimated_parameters(text):
     """
-    Vérifie si le texte contient des paramètres estimés (valeurs numériques détectées).
+    Vérifie si le texte contient des mentions de paramètres estimés.
     """
-    # Rechercher des mentions de paramètres estimés accompagnés de valeurs numériques
-    if ("estimated parameters" in text.lower() or "parameters" in text.lower()) and re.search(r"\d+", text):
+    if "estimated parameters" in text.lower() or "parameters" in text.lower():
         return "Oui"
     return "Non"
 
@@ -106,7 +103,7 @@ st.title("Recherche PK/PKPD avec extraction des paramètres estimés")
 
 query = st.text_input("Entrez vos mots-clés de recherche (ex : clearance absorption distribution volume)")
 user_keywords = query.split()  # Mots donnés par l'utilisateur
-max_results = st.slider("Nombre d'articles à récupérer", 5, 50, 20)
+num_articles = st.slider("Nombre d'articles après filtrage", 1, 50, 10)  # Limite après filtrage
 
 pharmacometry_keywords = [
     "PK model", "bicompartimental", "monocompartimental", 
@@ -118,20 +115,26 @@ pharmacometry_keywords = [
 
 if st.button("Rechercher"):
     if query:
-        # Construire la requête avec les mots-clés utilisateur à 100% et les mots-clés pharmacométriques en préférence
+        # Construire la requête avec les mots-clés utilisateur et pharmacométriques
         constructed_query = construct_query_with_keywords(user_keywords, pharmacometry_keywords)
         st.write(f"Requête utilisée : {constructed_query}")
 
         st.write("Recherche en cours...")
-        pubmed_ids = search_pubmed(constructed_query, max_results)
-        st.write(f"Articles trouvés : {len(pubmed_ids)}")
+        pubmed_ids = search_pubmed(constructed_query, max_results=200)  # Récupérer plus d'articles pour les filtrer
+        st.write(f"Articles trouvés avant filtrage : {len(pubmed_ids)}")
 
         if pubmed_ids:
             st.write("Récupération des détails des articles...")
             articles = fetch_article_details(pubmed_ids)
-            df = pd.DataFrame(articles)
 
-            # Vérification des colonnes et tri dynamique
+            # Filtrer et limiter au nombre spécifié par l'utilisateur
+            filtered_articles = [article for article in articles if article["Mention de paramètres estimés"] == "Oui"]
+            filtered_articles = filtered_articles[:num_articles]  # Limiter au nombre après filtrage
+
+            st.write(f"Articles après filtrage : {len(filtered_articles)}")
+            df = pd.DataFrame(filtered_articles)
+
+            # Affichage des colonnes et tri dynamique
             st.write("Colonnes disponibles dans les résultats :")
             st.write(df.columns)
             sort_column = st.selectbox("Trier les résultats par :", options=["Journal", "Date de publication"])
