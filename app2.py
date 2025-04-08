@@ -43,9 +43,9 @@ def search_pubmed(query, max_results=200):
         st.error(f"Erreur lors de la requête à l'API PubMed : {str(e)}")
         return []
 
-def fetch_article_details(pubmed_ids):
+def fetch_article_details(pubmed_ids, pharmacometry_keywords):
     """
-    Récupération des détails des articles à partir de leurs PubMed IDs.
+    Récupération des détails des articles à partir de leurs PubMed IDs et ajout du score de pertinence.
     """
     base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
     params = {
@@ -67,20 +67,30 @@ def fetch_article_details(pubmed_ids):
         for id, details in data.get("result", {}).items():
             if id == "uids":  # Clé inutilisée
                 continue
-            st.write(f"Analyse de l'article ID {id} : {details}")
+            title = details.get("title", "Non spécifié")
+            summary = title  # Pour simplifier, le résumé est le titre dans cet exemple
+
+            # Calcul du score de pertinence basé sur les mots-clés
+            score = calculate_relevance_score(title, summary, pharmacometry_keywords)
+
             article = {
                 "Journal": details.get("source", "Non spécifié"),
                 "Date de publication": details.get("pubdate", "Non spécifié"),
-                "Titre": details.get("title", "Non spécifié"),
+                "Titre": title,
                 "Lien": f"https://pubmed.ncbi.nlm.nih.gov/{id}/",
-                "Résumé": details.get("title", "Non spécifié"),
-                "Type de modèle": determine_model_type(details.get("title", ""), details.get("title", "")),
-                "Volume de distribution détecté": detect_distribution_volume(details.get("title", "")),
+                "Résumé": summary,
+                "Type de modèle": determine_model_type(title, summary),
+                "Volume de distribution détecté": detect_distribution_volume(title),
+                "Score de pertinence": score,
             }
-            # Inclure uniquement les articles mentionnant un volume de distribution
-            if article["Volume de distribution détecté"] == "Oui":
-                articles.append(article)
-        return articles
+            articles.append(article)
+
+        # Réorganiser les articles : prioriser ceux avec un volume détecté
+        articles_sorted = sorted(
+            articles,
+            key=lambda x: (x["Volume de distribution détecté"] == "Non", -x["Score de pertinence"])
+        )
+        return articles_sorted
     except requests.exceptions.JSONDecodeError:
         st.error("La réponse de l'API PubMed n'est pas au format JSON. Impossible de récupérer les articles.")
         return []
@@ -88,13 +98,20 @@ def fetch_article_details(pubmed_ids):
         st.error(f"Erreur lors de la requête à l'API PubMed : {str(e)}")
         return []
 
+def calculate_relevance_score(title, summary, keywords):
+    """
+    Calcule un score de pertinence en fonction du nombre de mots-clés présents dans le titre et le résumé.
+    """
+    text = f"{title} {summary}".lower()
+    return sum(1 for keyword in keywords if keyword.lower() in text)
+
 def determine_model_type(title, summary):
     """
     Détermine le type de modèle (PK, PKPD, etc.) en fonction des mots-clés dans le titre ou le résumé.
     """
     model_types = ["mono-compartimental", "bi-compartimental", "avec Tlag", "modèle de transit"]
     for model_type in model_types:
-        if model_type.lower() in title.lower() or model_type.lower() in summary.lower():
+        if model_type.lower() in (title + summary).lower():
             return model_type
     return "Non spécifié"
 
@@ -102,7 +119,6 @@ def detect_distribution_volume(text):
     """
     Vérifie si le texte contient une mention du volume de distribution avec une valeur numérique.
     """
-    # Expressions courantes pour le volume de distribution
     volume_patterns = [
         r"central compartment volume[:=]?\s*\d+\.?\d*\s*(mL|L|µL)",
         r"Vd[:=]?\s*\d+\.?\d*\s*(mL|L|µL)",
@@ -114,46 +130,38 @@ def detect_distribution_volume(text):
     return "Non"
 
 # Interface Streamlit
-st.title("Recherche PK/PKPD avec détection du volume de distribution")
+st.title("Recherche PK/PKPD avec tri avancé basé sur la pertinence")
 
 query = st.text_input("Entrez vos mots-clés de recherche (ex : clearance absorption distribution volume)")
-user_keywords = query.split()  # Mots donnés par l'utilisateur
-num_articles = st.slider("Nombre d'articles après filtrage", 1, 50, 10)  # Limite après filtrage
+user_keywords = query.split()
+num_articles = st.slider("Nombre maximal d'articles à afficher", 1, 50, 10)
 
 pharmacometry_keywords = [
     "PK model", "bicompartimental", "monocompartimental", 
     "pharmacokinetics", "pharmacodynamics", "estimated parameters", 
     "clearance", "absorption", "distribution volume", "central compartment",
     "Monolix", "NONMEM", "Mrgsolve", "Lixoft", "population modeling", 
-    "parameter variability", "elimination rate", "half-life"
+    "parameter variability", "elimination rate constant", "half-life", 
+    "bioavailability", "rate of absorption", "compartment volume"
 ]
 
 if st.button("Rechercher"):
     if query:
-        # Construire la requête avec les mots-clés utilisateur et pharmacométriques
         constructed_query = construct_query_with_keywords(user_keywords, pharmacometry_keywords)
         st.write(f"Requête utilisée : {constructed_query}")
 
-        # Étape 1 : Récupération des articles depuis PubMed
-        st.write("Recherche en cours...")
         pubmed_ids = search_pubmed(constructed_query, max_results=200)
         st.write(f"Articles trouvés après récupération initiale : {len(pubmed_ids)}")
 
         if pubmed_ids:
-            # Étape 2 : Récupération des détails des articles
-            st.write("Récupération des détails des articles...")
-            articles = fetch_article_details(pubmed_ids)
-            st.write(f"Articles trouvés après récupération des détails : {len(articles)}")
+            articles = fetch_article_details(pubmed_ids, pharmacometry_keywords)
+            st.write(f"Articles après tri par pertinence et présence de paramètres estimés : {len(articles)}")
 
-            # Étape 3 : Limitation au nombre demandé par l'utilisateur
             limited_articles = articles[:num_articles]
-            st.write(f"Articles affichés après limitation utilisateur : {len(limited_articles)}")
-            
-            # Affichage des résultats finaux
+            st.write(f"Articles affichés : {len(limited_articles)}")
             df = pd.DataFrame(limited_articles)
             st.dataframe(df)
 
-            # Option d'export des résultats
             st.download_button(
                 label="Télécharger les résultats en CSV",
                 data=df.to_csv(index=False),
@@ -161,6 +169,6 @@ if st.button("Rechercher"):
                 mime="text/csv",
             )
         else:
-            st.warning("Aucun article correspondant trouvé. Essayez d'élargir votre recherche.")
+            st.warning("Aucun article trouvé.")
     else:
         st.warning("Veuillez entrer des mots-clés pour effectuer une recherche.")
