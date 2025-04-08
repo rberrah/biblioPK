@@ -119,31 +119,27 @@ if st.button("Rechercher"):
         constructed_query = construct_query_with_keywords(user_keywords, pharmacometry_keywords)
         st.write(f"Requête utilisée : {constructed_query}")
 
+        # Étape 1 : Récupération des articles depuis PubMed
         st.write("Recherche en cours...")
-        pubmed_ids = search_pubmed(constructed_query, max_results=200)  # Récupérer plus d'articles pour les filtrer
-        st.write(f"Articles trouvés avant filtrage : {len(pubmed_ids)}")
+        pubmed_ids = search_pubmed(constructed_query, max_results=200)
+        st.write(f"Articles trouvés après récupération initiale : {len(pubmed_ids)}")
 
         if pubmed_ids:
+            # Étape 2 : Récupération des détails des articles
             st.write("Récupération des détails des articles...")
             articles = fetch_article_details(pubmed_ids)
+            st.write(f"Articles trouvés après récupération des détails : {len(articles)}")
 
-            # Filtrer et limiter au nombre spécifié par l'utilisateur
+            # Étape 3 : Filtrage des articles avec "estimated parameters"
             filtered_articles = [article for article in articles if article["Mention de paramètres estimés"] == "Oui"]
-            filtered_articles = filtered_articles[:num_articles]  # Limiter au nombre après filtrage
+            st.write(f"Articles après filtrage sur les paramètres estimés : {len(filtered_articles)}")
 
-            st.write(f"Articles après filtrage : {len(filtered_articles)}")
-            df = pd.DataFrame(filtered_articles)
-
-            # Affichage des colonnes et tri dynamique
-            st.write("Colonnes disponibles dans les résultats :")
-            st.write(df.columns)
-            sort_column = st.selectbox("Trier les résultats par :", options=["Journal", "Date de publication"])
-            if sort_column in df.columns:
-                df = df.sort_values(by=sort_column, ascending=True)
-            else:
-                st.warning(f"La colonne '{sort_column}' n'existe pas dans les résultats. Le tri est ignoré.")
-
-            # Affichage des résultats
+            # Étape 4 : Limitation au nombre demandé par l'utilisateur
+            limited_articles = filtered_articles[:num_articles]
+            st.write(f"Articles affichés après application de la limite utilisateur : {len(limited_articles)}")
+            
+            # Affichage des résultats finaux
+            df = pd.DataFrame(limited_articles)
             st.dataframe(df)
 
             # Option d'export des résultats
