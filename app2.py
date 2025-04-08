@@ -21,8 +21,18 @@ def search_pubmed(query, max_results=50):
         "retmode": "json",
         "retmax": max_results,
     }
-    response = requests.get(base_url, params=params)
-    return response.json().get("esearchresult", {}).get("idlist", [])
+
+    try:
+        response = requests.get(base_url, params=params)
+        response.raise_for_status()  # Vérifie les erreurs HTTP (ex: 404, 500)
+        data = response.json()  # Tente de parser la réponse en JSON
+        return data.get("esearchresult", {}).get("idlist", [])
+    except requests.exceptions.JSONDecodeError:
+        st.error("La réponse de l'API PubMed n'est pas au format JSON. Vérifiez votre requête.")
+        return []
+    except requests.exceptions.RequestException as e:
+        st.error(f"Erreur lors de la requête à l'API PubMed : {str(e)}")
+        return []
 
 def fetch_article_details(pubmed_ids):
     """
@@ -34,23 +44,31 @@ def fetch_article_details(pubmed_ids):
         "id": ",".join(pubmed_ids),
         "retmode": "json",
     }
-    response = requests.get(base_url, params=params)
-    results = response.json()
 
-    articles = []
-    for id, details in results.get("result", {}).items():
-        if id == "uids":  # Clé inutilisée
-            continue
-        article = {
-            "Titre": details.get("title", "Non spécifié"),
-            "Date de publication": details.get("pubdate", "Non spécifié"),
-            "Lien": f"https://pubmed.ncbi.nlm.nih.gov/{id}/",
-            "Journal": details.get("source", "Non spécifié"),
-            "Résumé": details.get("title", "Non spécifié"),
-            "Paramètres PK": extract_pk_parameters(details.get("title", "")),
-        }
-        articles.append(article)
-    return articles
+    try:
+        response = requests.get(base_url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        articles = []
+        for id, details in data.get("result", {}).items():
+            if id == "uids":  # Clé inutilisée
+                continue
+            article = {
+                "Titre": details.get("title", "Non spécifié"),
+                "Date de publication": details.get("pubdate", "Non spécifié"),
+                "Lien": f"https://pubmed.ncbi.nlm.nih.gov/{id}/",
+                "Journal": details.get("source", "Non spécifié"),
+                "Résumé": details.get("title", "Non spécifié"),
+                "Paramètres PK": extract_pk_parameters(details.get("title", "")),
+            }
+            articles.append(article)
+        return articles
+    except requests.exceptions.JSONDecodeError:
+        st.error("La réponse de l'API PubMed n'est pas au format JSON. Impossible de récupérer les articles.")
+        return []
+    except requests.exceptions.RequestException as e:
+        st.error(f"Erreur lors de la requête à l'API PubMed : {str(e)}")
+        return []
 
 def extract_pk_parameters(text):
     """
