@@ -2,13 +2,15 @@ import requests
 import pandas as pd
 import streamlit as st
 
-def construct_query_with_required_keywords(query):
+def construct_query(query, use_enrichment=True):
     """
-    Construit une requête PubMed qui rend obligatoires certains mots-clés spécifiques aux modèles PK et PKPD.
+    Construit une requête PubMed avec ou sans mots-clés enrichis.
     """
-    required_keywords = ["pharmacometry", "estimated parameters"]
-    enriched_query = query + " AND " + " AND ".join(required_keywords)
-    return enriched_query
+    if use_enrichment:
+        required_keywords = ["PK", "estimated parameters"]
+        enriched_query = query + " AND (" + " OR ".join(required_keywords) + ")"
+        return enriched_query
+    return query
 
 def search_pubmed(query, max_results=50):
     """
@@ -82,16 +84,17 @@ def extract_pk_parameters(text):
 st.title("Recherche PK/PKPD avec extraction des paramètres pharmacocinétiques")
 
 query = st.text_input("Entrez vos mots-clés de recherche (ex : pharmacometry PK)")
+use_enrichment = st.checkbox("Ajouter des mots-clés spécifiques (pharmacometry, estimated parameters)", value=True)
 max_results = st.slider("Nombre d'articles à récupérer", 5, 50, 20)
 
 if st.button("Rechercher"):
     if query:
-        # Construire la requête enrichie avec mots-clés obligatoires
-        enriched_query = construct_query_with_required_keywords(query)
-        st.write(f"Requête utilisée : {enriched_query}")
+        # Construire la requête avec ou sans enrichissement
+        constructed_query = construct_query(query, use_enrichment)
+        st.write(f"Requête utilisée : {constructed_query}")
 
         st.write("Recherche en cours...")
-        pubmed_ids = search_pubmed(enriched_query, max_results)
+        pubmed_ids = search_pubmed(constructed_query, max_results)
         st.write(f"Articles trouvés : {len(pubmed_ids)}")
 
         if pubmed_ids:
@@ -110,6 +113,6 @@ if st.button("Rechercher"):
                 mime="text/csv",
             )
         else:
-            st.warning("Aucun article correspondant trouvé.")
+            st.warning("Aucun article correspondant trouvé. Essayez d'élargir votre recherche.")
     else:
         st.warning("Veuillez entrer des mots-clés pour effectuer une recherche.")
