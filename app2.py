@@ -3,6 +3,8 @@ import pandas as pd
 import math
 import re
 import streamlit as st
+from sklearn.ensemble import GradientBoostingClassifier
+import numpy as np
 
 def construct_query_with_keywords(user_keywords, pharmacometry_keywords):
     """
@@ -116,7 +118,7 @@ def calculate_relevance_score(text, keywords):
     return score
 
 # Interface Streamlit
-st.title("Recherche PK/PKPD avec détection des modèles PK et paramètres estimés")
+st.title("Application inspirée de PKPDAI avec classification des modèles PK")
 
 query = st.text_input("Entrez vos mots-clés de recherche (ex : clearance absorption volume)")
 user_keywords = query.split()
