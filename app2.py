@@ -158,3 +158,4 @@ if st.button("Rechercher"):
             st.warning("Aucun article correspondant trouvé. Essayez d'élargir votre recherche.")
     else:
         st.warning("Veuillez entrer des mots-clés pour effectuer une recherche.")
+        
