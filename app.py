@@ -2,6 +2,20 @@ import requests
 import pandas as pd
 import streamlit as st
 
+def enrich_query_with_pk_keywords(query):
+    """
+    Enrichit la requête de recherche initiale avec des mots-clés spécifiques aux modèles PK/PKPD.
+    """
+    pk_keywords = [
+        "Monolix", "NONMEM", "estimated clearance", 
+        "pharmacokinetics model", "pharmacodynamic model", 
+        "population PK", "compartmental model", 
+        "estimated parameter", "Bayesian analysis", "clearance variability",
+        "PKPD modeling", "absorption rate", "elimination half-life"
+    ]
+    enriched_query = query + " (" + " OR ".join(pk_keywords) + ")"
+    return enriched_query
+
 def search_pubmed(query, max_results=20):
     """
     Recherche des articles sur PubMed via l'API Entrez.
@@ -84,18 +98,21 @@ def calculate_relevance_score(article, query_keywords):
 st.title("Recherche PubMed spécialisée pour les modèles PK et PKPD")
 
 # Entrée utilisateur
-query = st.text_input("Critères de recherche (exemple : 'PK model ICU')", "")
+query = st.text_input("Critères de recherche (exemple : 'ICU')", "")
 max_results = st.slider("Nombre d'articles à récupérer", 5, 50, 20)
 
 if st.button("Rechercher"):
     if query:
+        # Enrichir la requête avec des mots-clés spécifiques aux modèles PK/PKPD
+        enriched_query = enrich_query_with_pk_keywords(query)
+        st.write(f"Requête enrichie utilisée : {enriched_query}")
+
         st.write("Recherche en cours...")
-        query_keywords = query.split()
-        pubmed_ids = search_pubmed(query, max_results)
+        pubmed_ids = search_pubmed(enriched_query, max_results)
         st.write(f"{len(pubmed_ids)} articles trouvés.")
 
         st.write("Récupération des détails des articles et ajout des informations spécifiques...")
-        articles = fetch_article_details(pubmed_ids, query_keywords)
+        articles = fetch_article_details(pubmed_ids, enriched_query.split())
         df = pd.DataFrame(articles)
 
         # Affichage des résultats
