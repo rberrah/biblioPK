@@ -131,10 +131,14 @@ if st.button("Rechercher"):
             articles = fetch_article_details(pubmed_ids)
             df = pd.DataFrame(articles)
 
-            # Tri dynamique
+            # Vérification des colonnes et tri dynamique
+            st.write("Colonnes disponibles dans les résultats :")
+            st.write(df.columns)
             sort_column = st.selectbox("Trier les résultats par :", options=["Journal", "Date de publication"])
-            if sort_column:
+            if sort_column in df.columns:
                 df = df.sort_values(by=sort_column, ascending=True)
+            else:
+                st.warning(f"La colonne '{sort_column}' n'existe pas dans les résultats. Le tri est ignoré.")
 
             # Affichage des résultats
             st.dataframe(df)
