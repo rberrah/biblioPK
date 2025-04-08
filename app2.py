@@ -3,13 +3,20 @@ import pandas as pd
 import math
 import streamlit as st
 
-def construct_query_with_minimum_keywords(query, keywords, min_percentage=33):
+def construct_query_with_keywords(user_keywords, pharmacometry_keywords):
     """
-    Construit une requête PubMed avec un pourcentage minimum de mots-clés requis.
+    Construit une requête PubMed avec des mots-clés obligatoires (donnés par l'utilisateur à 100%)
+    et au moins 33% des mots-clés liés à la pharmacométrie.
     """
-    min_keywords = math.ceil(len(keywords) * min_percentage / 100)  # Calcule le nombre de mots-clés nécessaires
-    required_keywords = " OR ".join(keywords[:min_keywords])  # Prend au moins le minimum nécessaire
-    enriched_query = f"({query}) AND ({required_keywords})"
+    # Mots-clés obligatoires donnés par l'utilisateur
+    user_query = " AND ".join(user_keywords)
+
+    # Mots-clés pharmacométriques : au moins 33% arrondi au supérieur
+    min_keywords = math.ceil(len(pharmacometry_keywords) * 33 / 100)
+    pharmacometry_query = " OR ".join(pharmacometry_keywords[:min_keywords])
+
+    # Construction de la requête enrichie
+    enriched_query = f"({user_query}) AND ({pharmacometry_query})"
     return enriched_query
 
 def search_pubmed(query, max_results=50):
@@ -85,23 +92,22 @@ def determine_model_type(title, summary):
 # Interface Streamlit
 st.title("Recherche PK/PKPD avec tri avancé et extraction des modèles pharmacocinétiques")
 
-query = st.text_input("Entrez vos mots-clés de recherche (ex : pharmacokinetics)")
-use_enrichment = st.checkbox("Activer les mots-clés obligatoires (lié à la pharmacométrie)", value=True)
+query = st.text_input("Entrez vos mots-clés de recherche (ex : clearance absorption distribution volume)")
+user_keywords = query.split()  # Mots donnés par l'utilisateur
 max_results = st.slider("Nombre d'articles à récupérer", 5, 50, 20)
 
-keywords = [
+pharmacometry_keywords = [
     "PK model", "bicompartimental", "monocompartimental", 
-    "pharmacokinetics", "estimated parameters", "clearance", 
-    "absorption", "distribution volume", "central compartment"
+    "pharmacokinetics", "pharmacodynamics", "estimated parameters", 
+    "clearance", "absorption", "distribution volume", "central compartment",
+    "Monolix", "NONMEM", "Mrgsolve", "Lixoft", "population modeling", 
+    "parameter variability", "elimination rate", "half-life"
 ]
 
 if st.button("Rechercher"):
     if query:
-        # Construire la requête en incluant un pourcentage minimum de mots-clés
-        if use_enrichment:
-            constructed_query = construct_query_with_minimum_keywords(query, keywords, min_percentage=33)
-        else:
-            constructed_query = query
+        # Construire la requête avec les mots-clés utilisateur à 100% et les mots-clés pharmacométriques à 33%
+        constructed_query = construct_query_with_keywords(user_keywords, pharmacometry_keywords)
         st.write(f"Requête utilisée : {constructed_query}")
 
         st.write("Recherche en cours...")
