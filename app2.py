@@ -1,19 +1,19 @@
 import requests
 import pandas as pd
 import math
+import re  # Utilisé pour détecter des valeurs numériques
 import streamlit as st
 
 def construct_query_with_keywords(user_keywords, pharmacometry_keywords):
     """
     Construit une requête PubMed avec des mots-clés obligatoires (donnés par l'utilisateur à 100%)
-    et au moins 33% des mots-clés liés à la pharmacométrie.
+    et des mots-clés pharmacométriques de préférence (non obligatoires).
     """
     # Mots-clés obligatoires donnés par l'utilisateur
     user_query = " AND ".join(user_keywords)
 
-    # Mots-clés pharmacométriques : au moins 33% arrondi au supérieur
-    min_keywords = math.ceil(len(pharmacometry_keywords) * 33 / 100)
-    pharmacometry_query = " OR ".join(pharmacometry_keywords[:min_keywords])
+    # Mots-clés pharmacométriques : ajoutés en préférence avec OR
+    pharmacometry_query = " OR ".join(pharmacometry_keywords)
 
     # Construction de la requête enrichie
     enriched_query = f"({user_query}) AND ({pharmacometry_query})"
@@ -69,10 +69,10 @@ def fetch_article_details(pubmed_ids):
                 "Lien": f"https://pubmed.ncbi.nlm.nih.gov/{id}/",
                 "Résumé": details.get("title", "Non spécifié"),
                 "Type de modèle": determine_model_type(details.get("title", ""), details.get("title", "")),
-                "Figure/Tableau avec paramètres estimés": extract_figures_tables(details.get("title", "")),
+                "Paramètres estimés détectés": detect_estimated_parameters(details.get("title", "")),
             }
-            # Filtrer uniquement les articles avec une figure ou un tableau contenant des paramètres estimés
-            if article["Figure/Tableau avec paramètres estimés"] == "Oui":
+            # Filtrer uniquement les articles contenant des valeurs numériques pour les paramètres estimés
+            if article["Paramètres estimés détectés"] == "Oui":
                 articles.append(article)
         return articles
     except requests.exceptions.JSONDecodeError:
@@ -92,17 +92,17 @@ def determine_model_type(title, summary):
             return model_type
     return "Non spécifié"
 
-def extract_figures_tables(text):
+def detect_estimated_parameters(text):
     """
-    Vérifie si le texte contient une mention de figure ou tableau avec "estimated parameters".
+    Vérifie si le texte contient des paramètres estimés (valeurs numériques détectées).
     """
-    if "figure" in text.lower() or "table" in text.lower():
-        if "estimated parameters" in text.lower():
-            return "Oui"
+    # Rechercher des mentions de paramètres estimés accompagnés de valeurs numériques
+    if ("estimated parameters" in text.lower() or "parameters" in text.lower()) and re.search(r"\d+", text):
+        return "Oui"
     return "Non"
 
 # Interface Streamlit
-st.title("Recherche PK/PKPD avec tri avancé et extraction des modèles pharmacocinétiques")
+st.title("Recherche PK/PKPD avec extraction des paramètres estimés")
 
 query = st.text_input("Entrez vos mots-clés de recherche (ex : clearance absorption distribution volume)")
 user_keywords = query.split()  # Mots donnés par l'utilisateur
@@ -118,7 +118,7 @@ pharmacometry_keywords = [
 
 if st.button("Rechercher"):
     if query:
-        # Construire la requête avec les mots-clés utilisateur à 100% et les mots-clés pharmacométriques à 33%
+        # Construire la requête avec les mots-clés utilisateur à 100% et les mots-clés pharmacométriques en préférence
         constructed_query = construct_query_with_keywords(user_keywords, pharmacometry_keywords)
         st.write(f"Requête utilisée : {constructed_query}")
 
