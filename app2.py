@@ -69,6 +69,7 @@ def fetch_article_details(pubmed_ids):
                 "Lien": f"https://pubmed.ncbi.nlm.nih.gov/{id}/",
                 "Résumé": details.get("title", "Non spécifié"),
                 "Type de modèle": determine_model_type(details.get("title", ""), details.get("title", "")),
+                "Figure/Tableau": extract_figures_tables(details.get("title", "")),
             }
             articles.append(article)
         return articles
@@ -88,6 +89,15 @@ def determine_model_type(title, summary):
         if model_type.lower() in title.lower() or model_type.lower() in summary.lower():
             return model_type
     return "Non spécifié"
+
+def extract_figures_tables(text):
+    """
+    Vérifie si le texte contient une mention de figure ou tableau avec "estimated parameters".
+    """
+    if "figure" in text.lower() or "table" in text.lower():
+        if "estimated parameters" in text.lower():
+            return "Oui"
+    return "Non"
 
 # Interface Streamlit
 st.title("Recherche PK/PKPD avec tri avancé et extraction des modèles pharmacocinétiques")
