@@ -1,7 +1,7 @@
 import requests
 import pandas as pd
 import math
-import re
+import re  # Utilisé pour détecter des valeurs numériques associées au volume de distribution
 import streamlit as st
 
 def construct_query_with_keywords(user_keywords, pharmacometry_keywords):
@@ -69,9 +69,11 @@ def fetch_article_details(pubmed_ids):
                 "Lien": f"https://pubmed.ncbi.nlm.nih.gov/{id}/",
                 "Résumé": details.get("title", "Non spécifié"),
                 "Type de modèle": determine_model_type(details.get("title", ""), details.get("title", "")),
-                "Mention de paramètres estimés": detect_estimated_parameters(details.get("title", "")),
+                "Volume de distribution détecté": detect_distribution_volume(details.get("title", "")),
             }
-            articles.append(article)
+            # Inclure uniquement les articles mentionnant un volume de distribution
+            if article["Volume de distribution détecté"] == "Oui":
+                articles.append(article)
         return articles
     except requests.exceptions.JSONDecodeError:
         st.error("La réponse de l'API PubMed n'est pas au format JSON. Impossible de récupérer les articles.")
@@ -90,16 +92,23 @@ def determine_model_type(title, summary):
             return model_type
     return "Non spécifié"
 
-def detect_estimated_parameters(text):
+def detect_distribution_volume(text):
     """
-    Vérifie si le texte contient des mentions de paramètres estimés.
+    Vérifie si le texte contient une mention du volume de distribution avec une valeur numérique.
     """
-    if "estimated parameters" in text.lower() or "parameters" in text.lower():
-        return "Oui"
+    # Expressions courantes pour le volume de distribution
+    volume_patterns = [
+        r"central compartment volume[:=]?\s*\d+\.?\d*\s*(mL|L|µL)",  # Exemple : "central compartment volume: 50 L"
+        r"Vd[:=]?\s*\d+\.?\d*\s*(mL|L|µL)",  # Exemple : "Vd = 50 L"
+        r"distribution volume[:=]?\s*\d+\.?\d*\s*(mL|L|µL)",  # Exemple : "distribution volume = 100 mL"
+    ]
+    for pattern in volume_patterns:
+        if re.search(pattern, text, re.IGNORECASE):
+            return "Oui"
     return "Non"
 
 # Interface Streamlit
-st.title("Recherche PK/PKPD avec extraction des paramètres estimés")
+st.title("Recherche PK/PKPD avec détection du volume de distribution")
 
 query = st.text_input("Entrez vos mots-clés de recherche (ex : clearance absorption distribution volume)")
 user_keywords = query.split()  # Mots donnés par l'utilisateur
@@ -130,13 +139,9 @@ if st.button("Rechercher"):
             articles = fetch_article_details(pubmed_ids)
             st.write(f"Articles trouvés après récupération des détails : {len(articles)}")
 
-            # Étape 3 : Filtrage des articles avec "estimated parameters"
-            filtered_articles = [article for article in articles if article["Mention de paramètres estimés"] == "Oui"]
-            st.write(f"Articles après filtrage sur les paramètres estimés : {len(filtered_articles)}")
-
-            # Étape 4 : Limitation au nombre demandé par l'utilisateur
-            limited_articles = filtered_articles[:num_articles]
-            st.write(f"Articles affichés après application de la limite utilisateur : {len(limited_articles)}")
+            # Étape 3 : Limitation au nombre demandé par l'utilisateur
+            limited_articles = articles[:num_articles]
+            st.write(f"Articles affichés après limitation utilisateur : {len(limited_articles)}")
             
             # Affichage des résultats finaux
             df = pd.DataFrame(limited_articles)
