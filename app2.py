@@ -1,7 +1,7 @@
 import requests
 import pandas as pd
 import math
-import re  # Utilisé pour détecter des valeurs numériques associées au volume de distribution
+import re
 import streamlit as st
 
 def construct_query_with_keywords(user_keywords, pharmacometry_keywords):
@@ -58,10 +58,16 @@ def fetch_article_details(pubmed_ids):
         response = requests.get(base_url, params=params)
         response.raise_for_status()
         data = response.json()
+        
+        # Affichage des données brutes pour débogage
+        st.write("Données brutes retournées par l'API esummary :")
+        st.write(data)
+        
         articles = []
         for id, details in data.get("result", {}).items():
             if id == "uids":  # Clé inutilisée
                 continue
+            st.write(f"Analyse de l'article ID {id} : {details}")
             article = {
                 "Journal": details.get("source", "Non spécifié"),
                 "Date de publication": details.get("pubdate", "Non spécifié"),
@@ -98,9 +104,9 @@ def detect_distribution_volume(text):
     """
     # Expressions courantes pour le volume de distribution
     volume_patterns = [
-        r"central compartment volume[:=]?\s*\d+\.?\d*\s*(mL|L|µL)",  # Exemple : "central compartment volume: 50 L"
-        r"Vd[:=]?\s*\d+\.?\d*\s*(mL|L|µL)",  # Exemple : "Vd = 50 L"
-        r"distribution volume[:=]?\s*\d+\.?\d*\s*(mL|L|µL)",  # Exemple : "distribution volume = 100 mL"
+        r"central compartment volume[:=]?\s*\d+\.?\d*\s*(mL|L|µL)",
+        r"Vd[:=]?\s*\d+\.?\d*\s*(mL|L|µL)",
+        r"distribution volume[:=]?\s*\d+\.?\d*\s*(mL|L|µL)"
     ]
     for pattern in volume_patterns:
         if re.search(pattern, text, re.IGNORECASE):
@@ -158,4 +164,3 @@ if st.button("Rechercher"):
             st.warning("Aucun article correspondant trouvé. Essayez d'élargir votre recherche.")
     else:
         st.warning("Veuillez entrer des mots-clés pour effectuer une recherche.")
-        
