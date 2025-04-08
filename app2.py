@@ -7,7 +7,7 @@ def construct_query(query, use_enrichment=True):
     Construit une requête PubMed avec ou sans mots-clés enrichis.
     """
     if use_enrichment:
-        required_keywords = ["PK", "estimated parameters"]
+        required_keywords = ["pharmacometry", "estimated parameters", "model"]
         enriched_query = query + " AND (" + " OR ".join(required_keywords) + ")"
         return enriched_query
     return query
@@ -56,12 +56,12 @@ def fetch_article_details(pubmed_ids):
             if id == "uids":  # Clé inutilisée
                 continue
             article = {
-                "Titre": details.get("title", "Non spécifié"),
-                "Date de publication": details.get("pubdate", "Non spécifié"),
-                "Lien": f"https://pubmed.ncbi.nlm.nih.gov/{id}/",
                 "Journal": details.get("source", "Non spécifié"),
+                "Date de publication": details.get("pubdate", "Non spécifié"),
+                "Titre": details.get("title", "Non spécifié"),
+                "Lien": f"https://pubmed.ncbi.nlm.nih.gov/{id}/",
                 "Résumé": details.get("title", "Non spécifié"),
-                "Paramètres PK": extract_pk_parameters(details.get("title", "")),
+                "Type de modèle": determine_model_type(details.get("title", ""), details.get("title", "")),
             }
             articles.append(article)
         return articles
@@ -72,19 +72,21 @@ def fetch_article_details(pubmed_ids):
         st.error(f"Erreur lors de la requête à l'API PubMed : {str(e)}")
         return []
 
-def extract_pk_parameters(text):
+def determine_model_type(title, summary):
     """
-    Extrait les paramètres PK des titres ou résumés des articles.
+    Détermine le type de modèle (PK, PKPD, etc.) en fonction des mots-clés dans le titre ou le résumé.
     """
-    pk_parameters = ["clearance", "volume of distribution", "half-life", "absorption rate"]
-    extracted_params = [param for param in pk_parameters if param.lower() in text.lower()]
-    return ", ".join(extracted_params) if extracted_params else "Non spécifié"
+    model_types = ["mono-compartimental", "bi-compartimental", "avec Tlag", "modèle de transit"]
+    for model_type in model_types:
+        if model_type.lower() in title.lower() or model_type.lower() in summary.lower():
+            return model_type
+    return "Non spécifié"
 
 # Interface Streamlit
-st.title("Recherche PK/PKPD avec extraction des paramètres pharmacocinétiques")
+st.title("Recherche PK/PKPD avec extraction avancée des modèles pharmacocinétiques")
 
 query = st.text_input("Entrez vos mots-clés de recherche (ex : pharmacometry PK)")
-use_enrichment = st.checkbox("Ajouter des mots-clés spécifiques (pharmacometry, estimated parameters)", value=True)
+use_enrichment = st.checkbox("Ajouter des mots-clés spécifiques (pharmacometry, estimated parameters, model)", value=True)
 max_results = st.slider("Nombre d'articles à récupérer", 5, 50, 20)
 
 if st.button("Rechercher"):
@@ -101,6 +103,11 @@ if st.button("Rechercher"):
             st.write("Récupération des détails des articles...")
             articles = fetch_article_details(pubmed_ids)
             df = pd.DataFrame(articles)
+
+            # Ajout de tri interactif par Streamlit
+            sort_column = st.selectbox("Trier les résultats par :", options=["Journal", "Date de publication"])
+            if sort_column:
+                df = df.sort_values(by=sort_column, ascending=True)
 
             # Affichage des résultats
             st.dataframe(df)
