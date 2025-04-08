@@ -69,9 +69,11 @@ def fetch_article_details(pubmed_ids):
                 "Lien": f"https://pubmed.ncbi.nlm.nih.gov/{id}/",
                 "Résumé": details.get("title", "Non spécifié"),
                 "Type de modèle": determine_model_type(details.get("title", ""), details.get("title", "")),
-                "Figure/Tableau": extract_figures_tables(details.get("title", "")),
+                "Figure/Tableau avec paramètres estimés": extract_figures_tables(details.get("title", "")),
             }
-            articles.append(article)
+            # Filtrer uniquement les articles avec une figure ou un tableau contenant des paramètres estimés
+            if article["Figure/Tableau avec paramètres estimés"] == "Oui":
+                articles.append(article)
         return articles
     except requests.exceptions.JSONDecodeError:
         st.error("La réponse de l'API PubMed n'est pas au format JSON. Impossible de récupérer les articles.")
